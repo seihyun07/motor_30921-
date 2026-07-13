@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>PWM 모터 제어 시뮬레이터</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+  <header>
+    <h1>PWM 모터 제어 알고리즘 시뮬레이터</h1>
+
+    <p>
+      PWM 값과 회전 방향을 바꾸면 모터의 회전 속도, 듀티비,<br>
+      핀 출력과 아두이노 코드가 함께 바뀝니다.
+    </p>
+  </header>
+
+  <main>
+    <div class="layout">
+
+      <aside class="card">
+        <h2>제어 변수</h2>
+
+        <div class="control-group">
+          <div class="control-title">
+            <label for="targetPwm">목표 PWM</label>
+            <span id="targetPwmValue" class="value">150</span>
+          </div>
+
+          <input
+            id="targetPwm"
+            type="range"
+            min="-50"
+            max="305"
+            value="150"
+          >
+
+          <p class="description">
+            0~255를 벗어나면 limitPwm() 함수가 값을 제한합니다.
+          </p>
+        </div>
+
+        <div class="control-group">
+          <div class="control-title">
+            <label for="changeAmount">PWM 변화량</label>
+            <span id="changeAmountValue" class="value">5</span>
+          </div>
+
+          <input
+            id="changeAmount"
+            type="range"
+            min="1"
+            max="50"
+            value="5"
+          >
+        </div>
+
+        <div class="control-group">
+          <div class="control-title">
+            <label for="interval">변화 간격</label>
+            <span id="intervalValue" class="value">50ms</span>
+          </div>
+
+          <input
+            id="interval"
+            type="range"
+            min="10"
+            max="250"
+            step="10"
+            value="50"
+          >
+        </div>
+
+        <div class="control-group">
+          <div class="control-title">
+            <span>모터 방향</span>
+          </div>
+
+          <div class="direction-buttons">
+            <button
+              class="direction-button active"
+              data-direction="forward"
+            >
+              정회전
+            </button>
+
+            <button
+              class="direction-button"
+              data-direction="backward"
+            >
+              역회전
+            </button>
+
+            <button
+              class="direction-button"
+              data-direction="stop"
+            >
+              정지
+            </button>
+          </div>
+        </div>
+
+        <div class="control-group">
+          <div class="control-title">
+            <label for="maxRpm">최대 RPM 가정값</label>
+          </div>
+
+          <input
+            id="maxRpm"
+            type="number"
+            min="100"
+            max="20000"
+            value="1200"
+          >
+        </div>
+
+        <div class="action-buttons">
+          <button id="runButton">실행</button>
+          <button id="stopButton">즉시 정지</button>
+        </div>
+
+        <div id="status" class="status">
+          정회전, PWM 150이 선택되어 있습니다.
+        </div>
+      </aside>
+
+      <section>
+        <div class="card">
+          <h2>모터 동작</h2>
+
+          <div class="motor-stage">
+            <div id="directionDisplay" class="direction-display">
+              정회전
+            </div>
+
+            <div class="motor">
+              <div class="motor-body">
+                <div class="motor-label">DC MOTOR</div>
+              </div>
+
+              <div class="motor-cap"></div>
+              <div class="shaft"></div>
+
+              <div id="rotor" class="rotor">
+                <div class="rotor-center"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="result-grid">
+            <div class="result-box">
+              <span>현재 PWM</span>
+              <strong id="currentPwm">0</strong>
+            </div>
+
+            <div class="result-box">
+              <span>듀티비</span>
+              <strong id="dutyRatio">0%</strong>
+            </div>
+
+            <div class="result-box">
+              <span>예상 RPM</span>
+              <strong id="rpm">0</strong>
+            </div>
+
+            <div class="result-box">
+              <span>모터 상태</span>
+              <strong id="motorState">정지</strong>
+            </div>
+
+            <div class="result-box">
+              <span>IN1</span>
+              <strong id="in1">LOW</strong>
+            </div>
+
+            <div class="result-box">
+              <span>IN2</span>
+              <strong id="in2">LOW</strong>
+            </div>
+
+            <div class="result-box">
+              <span>PWM 핀</span>
+              <strong>9</strong>
+            </div>
+
+            <div class="result-box">
+              <span>제어 방식</span>
+              <strong>개방 루프</strong>
+            </div>
+          </div>
+        </div>
+
+        <div class="bottom-layout">
+          <div class="card">
+            <h2>PWM 파형</h2>
+
+            <div class="wave-container">
+              <svg viewBox="0 0 760 120">
+                <polyline
+                  id="wave"
+                  fill="none"
+                  stroke="#2563eb"
+                  stroke-width="5"
+                  stroke-linejoin="round"
+                  stroke-linecap="round"
+                ></polyline>
+              </svg>
+            </div>
+
+            <p class="description">
+              HIGH 구간이 길수록 듀티비가 증가합니다.
+            </p>
+          </div>
+
+          <div class="card">
+            <h2>알고리즘 과정</h2>
+
+            <div class="steps">
+              <div class="step">
+                <span class="step-number">1</span>
+                입력값 읽기
+              </div>
+
+              <div class="step">
+                <span class="step-number">2</span>
+                PWM 범위 검사
+              </div>
+
+              <div class="step">
+                <span class="step-number">3</span>
+                방향 판단
+              </div>
+
+              <div class="step">
+                <span class="step-number">4</span>
+                듀티비와 RPM 계산
+              </div>
+
+              <div class="step">
+                <span class="step-number">5</span>
+                모터 출력
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top: 20px;">
+          <h2>아두이노 C/C++ 코드</h2>
+
+          <pre><code id="arduinoCode"></code></pre>
+        </div>
+      </section>
+
+    </div>
+  </main>
+  <script src="script.js"></script>
+  <link rel="stylesheet" href="style.css">
+</body>
+</html>
